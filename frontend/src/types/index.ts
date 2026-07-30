@@ -1,0 +1,2 @@
+export interface Department { id: string; name: string; code: string; category: string; budget_crores: number; spent_crores: number; pending_files: number; avg_file_clearance_days: number; has_anomaly: boolean; anomaly_reason: string | null }
+export interface Scheme { id: string; name: string; scheme_type: string; district: string; pending_applications: number; avg_pending_days: number; completion_pct: number; is_delayed: boolean; delay_reason: string | null }

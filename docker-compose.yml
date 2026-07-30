@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  api:
+    build: ./backend
+    ports: ["8007:8000"]
+    env_file: .env
+    depends_on:
+      db: { condition: service_healthy }
+    volumes: ["./backend:/app"]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  frontend:
+    build: ./frontend
+    ports: ["3007:3000"]
+    environment: [NEXT_PUBLIC_API_URL=http://localhost:8007]
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: rtgs_dashboard, POSTGRES_USER: rtgs, POSTGRES_PASSWORD: "${DB_PASSWORD:-changeme}" }
+    ports: ["5439:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rtgs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+volumes:
+  pgdata:
