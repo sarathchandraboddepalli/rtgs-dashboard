@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from app.models.department import Department
 from app.models.scheme import Scheme
 from app.models.kpi_metric import KpiMetric
@@ -32,33 +33,75 @@ AP_SCHEMES = [
     {"name": "YSR Aarogyasri", "scheme_type": "health", "district": "Nellore", "total_beneficiaries": 198000, "active_beneficiaries": 192000, "pending_applications": 2100, "avg_pending_days": 11, "sla_days": 7, "disbursed_crores": 780, "target_crores": 850, "completion_pct": 91.8, "is_delayed": True, "delay_reason": "Specialist referral backlog"},
 ]
 
+AP_KPI_TEMPLATES = [
+    {"metric_name": "Budget Utilization", "metric_category": "spending", "unit": "%", "target_value": 90.0},
+    {"metric_name": "Avg File Clearance Days", "metric_category": "delivery", "unit": "days", "target_value": 20.0},
+    {"metric_name": "Beneficiary Satisfaction", "metric_category": "satisfaction", "unit": "%", "target_value": 85.0},
+    {"metric_name": "Compliance Score", "metric_category": "compliance", "unit": "%", "target_value": 95.0},
+]
+
 async def seed_data(db: AsyncSession):
     """Seed database with AP government mock data if empty."""
     count = (await db.execute(select(func.count(Department.id)))).scalar()
     if count and count > 0:
         return  # Already seeded
 
-    # Create departments
-    dept_map = {}
-    for dept_data in AP_DEPARTMENTS:
-        dept = Department(**dept_data)
-        db.add(dept)
-        await db.flush()
-        dept_map[dept_data["code"]] = dept.id
+    try:
+        # Create departments
+        dept_map = {}
+        for dept_data in AP_DEPARTMENTS:
+            dept = Department(**dept_data)
+            db.add(dept)
+            await db.flush()
+            dept_map[dept_data["code"]] = dept.id
 
-    # Map scheme types to departments
-    scheme_dept_map = {
-        "pension": "SWTW",
-        "housing": "MAUD",
-        "agriculture": "AGR",
-        "health": "HMFW",
-        "education": "EDU",
-    }
+        # Seed KPI metrics for each department
+        for dept_data in AP_DEPARTMENTS:
+            dept_id = dept_map[dept_data["code"]]
+            utilization = dept_data["spent_crores"] / dept_data["budget_crores"] * 100
+            clearance_days = dept_data["avg_file_clearance_days"]
+            kpi_values = {
+                "Budget Utilization": round(utilization, 1),
+                "Avg File Clearance Days": float(clearance_days),
+                "Beneficiary Satisfaction": round(max(60.0, 100.0 - clearance_days * 0.5), 1),
+                "Compliance Score": round(min(98.0, 70.0 + utilization * 0.3), 1),
+            }
+            for tmpl in AP_KPI_TEMPLATES:
+                current = kpi_values[tmpl["metric_name"]]
+                is_anomalous = (
+                    (tmpl["metric_name"] == "Budget Utilization" and current > 98.0) or
+                    (tmpl["metric_name"] == "Avg File Clearance Days" and current > 45.0) or
+                    (tmpl["metric_name"] == "Compliance Score" and current < 75.0)
+                )
+                trend = "improving" if current >= tmpl["target_value"] else "declining"
+                kpi = KpiMetric(
+                    department_id=dept_id,
+                    metric_name=tmpl["metric_name"],
+                    metric_category=tmpl["metric_category"],
+                    current_value=current,
+                    target_value=tmpl["target_value"],
+                    unit=tmpl["unit"],
+                    is_anomalous=is_anomalous,
+                    trend=trend,
+                )
+                db.add(kpi)
 
-    for scheme_data in AP_SCHEMES:
-        dept_code = scheme_dept_map.get(scheme_data["scheme_type"], "FIN")
-        dept_id = dept_map[dept_code]
-        scheme = Scheme(**scheme_data, department_id=dept_id)
-        db.add(scheme)
+        # Map scheme types to departments
+        scheme_dept_map = {
+            "pension": "SWTW",
+            "housing": "MAUD",
+            "agriculture": "AGR",
+            "health": "HMFW",
+            "education": "EDU",
+        }
 
-    await db.commit()
+        for scheme_data in AP_SCHEMES:
+            dept_code = scheme_dept_map.get(scheme_data["scheme_type"], "FIN")
+            dept_id = dept_map[dept_code]
+            scheme = Scheme(**scheme_data, department_id=dept_id)
+            db.add(scheme)
+
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        return  # Another concurrent request already seeded

@@ -8,7 +8,6 @@ router = APIRouter()
 
 @router.get("/executive-summary")
 async def executive_summary(db: AsyncSession = Depends(get_db)):
-    await seed_data(db)
     return await get_executive_summary(db)
 
 @router.get("/district-stats")

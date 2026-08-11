@@ -9,6 +9,8 @@ router = APIRouter()
 @router.get("/")
 async def list_kpis(department_id: str | None = None, is_anomalous: bool | None = None, db: AsyncSession = Depends(get_db)):
     q = select(KpiMetric)
+    if department_id is not None:
+        q = q.where(KpiMetric.department_id == department_id)
     if is_anomalous is not None:
         q = q.where(KpiMetric.is_anomalous == is_anomalous)
     result = await db.execute(q)

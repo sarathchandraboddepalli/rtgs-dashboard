@@ -18,6 +18,7 @@ export default function ExecutivePage() {
   if (!summary) return <div className="text-center py-12 text-red-500">Failed to load dashboard</div>
 
   const utilizationPct = summary.budget?.utilization_pct ?? 0
+  const maxPending = districts.length ? Math.max(...districts.map(x => x.total_pending)) : 0
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -54,7 +55,6 @@ export default function ExecutivePage() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {districts.map(d => {
-                const maxPending = Math.max(...districts.map(x => x.total_pending))
                 const loadPct = maxPending > 0 ? (d.total_pending / maxPending) * 100 : 0
                 return (
                   <tr key={d.district} className="hover:bg-gray-50">

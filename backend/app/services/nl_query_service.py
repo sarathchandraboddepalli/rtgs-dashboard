@@ -1,9 +1,9 @@
 import json
 import re
-from anthropic import Anthropic, APIError
+from anthropic import AsyncAnthropic, APIError
 from app.config import settings
 
-client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 INTENT_KEYWORDS = {
     "anomaly_check": ["anomal", "unusual", "spike", "outlier", "flag", "suspicious"],
@@ -73,7 +73,7 @@ Parse the user's natural language query into a JSON with:
 Respond ONLY with valid JSON. No explanation."""
 
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model=settings.CLAUDE_MODEL,
             max_tokens=256,
             system=system_prompt,
@@ -123,7 +123,8 @@ async def execute_query(filters: dict, intent: str, db) -> str:
             return "No departments found matching your criteria."
         total_budget = sum(d.budget_crores for d in depts)
         total_spent = sum(d.spent_crores for d in depts)
-        return f"Found {len(depts)} department(s). Total budget: ₹{total_budget:.0f} Cr. Total spent: ₹{total_spent:.0f} Cr ({total_spent/total_budget*100:.1f}%). Departments with anomalies: {sum(1 for d in depts if d.has_anomaly)}."
+        utilization_pct = (total_spent / total_budget * 100) if total_budget else 0.0
+        return f"Found {len(depts)} department(s). Total budget: ₹{total_budget:.0f} Cr. Total spent: ₹{total_spent:.0f} Cr ({utilization_pct:.1f}%). Departments with anomalies: {sum(1 for d in depts if d.has_anomaly)}."
 
     elif intent == "anomaly_check":
         q = select(Department).where(Department.has_anomaly == True)
